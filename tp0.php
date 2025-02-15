@@ -6,15 +6,14 @@ const EMAILS_TRIES_FILE = 'EmailsT.txt';
 
 /* ----------------------------------------------------------
    Fonction verifierEmail : Vérifie si une adresse email est valide.
-   ---------------------------------------------------------- */
+---------------------------------------------------------- */
 function verifierEmail($adresse) {
     return filter_var($adresse, FILTER_VALIDATE_EMAIL);
 }
 
 /* ----------------------------------------------------------
-   Fonction chargerEmails :
-   Lit un fichier et retourne un tableau d'emails.
-   ---------------------------------------------------------- */
+   Fonction chargerEmails : Lit un fichier et retourne un tableau d'emails.
+---------------------------------------------------------- */
 function chargerEmails($fichier) {
     return file_exists($fichier)
         ? array_map('trim', file($fichier, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES))
@@ -22,23 +21,34 @@ function chargerEmails($fichier) {
 }
 
 /* ----------------------------------------------------------
-   Fonction enregistrerEmails :
-   Sauvegarde un tableau d'emails dans un fichier.
-   ---------------------------------------------------------- */
+   Fonction enregistrerEmails : Sauvegarde un tableau d'emails dans un fichier.
+---------------------------------------------------------- */
 function enregistrerEmails($fichier, $emails) {
     file_put_contents($fichier, implode("\n", $emails) . "\n");
 }
 
+/* ----------------------------------------------------------
+   Fonction displayCurrentEmails : Affiche le contenu actuel d'EMAILS_FILE.
+---------------------------------------------------------- */
+function displayCurrentEmails() {
+    ob_start();
+    echo "<h4>Contenu actuel de " . EMAILS_FILE . " :</h4>";
+    if (file_exists(EMAILS_FILE)) {
+        echo "<pre>" . file_get_contents(EMAILS_FILE) . "</pre>";
+    } else {
+        echo "<pre>Aucun email enregistré.</pre>";
+    }
+    return ob_get_clean();
+}
 
-$action = $_GET['action'] ?? '';
-$message = '';
-$displayContent = '';
-
-if ($action === '1') {
-    // Action 1 : Nettoyer la liste
+/* ----------------------------------------------------------
+   Action 1 : Nettoyer la liste
+---------------------------------------------------------- */
+function processAction1() {
     $emails = chargerEmails(EMAILS_FILE);
     $validEmails = [];
     $invalidEmails = [];
+    
     foreach ($emails as $email) {
         if (verifierEmail($email)) {
             $validEmails[] = strtolower($email);
@@ -50,23 +60,29 @@ if ($action === '1') {
     if (count($invalidEmails) > 0) {
         enregistrerEmails(ADRESSES_NON_VALIDE_FILE, $invalidEmails);
     }
+    
     $message = "Nettoyage effectué : " . count($invalidEmails) . " adresses non valides supprimées (enregistrées dans '" . ADRESSES_NON_VALIDE_FILE . "') et " . count($validEmails) . " adresses valides conservées dans '" . EMAILS_FILE . "'.";
     
     ob_start();
     echo "<h4>Contenu de " . EMAILS_FILE . " (Emails valides) :</h4>";
-    echo "<pre>" . file_get_contents(EMAILS_FILE). "</pre>";
+    echo "<pre>" . file_get_contents(EMAILS_FILE) . "</pre>";
     if (file_exists(ADRESSES_NON_VALIDE_FILE)) {
         echo "<h4>Contenu de " . ADRESSES_NON_VALIDE_FILE . " (Emails non valides) :</h4>";
-        echo "<pre>" . file_get_contents(ADRESSES_NON_VALIDE_FILE). "</pre>";
+        echo "<pre>" . file_get_contents(ADRESSES_NON_VALIDE_FILE) . "</pre>";
     }
     $displayContent = ob_get_clean();
+    
+    return [$message, $displayContent];
+}
 
-} elseif ($action === '2') {
-    // Action 2 : Afficher un tableau contenant les adresses emails et leur fréquence
+/* ----------------------------------------------------------
+   Action 2 : Afficher un tableau contenant les adresses emails et leur fréquence
+---------------------------------------------------------- */
+function processAction2() {
     $emails = chargerEmails(EMAILS_FILE);
     $emailsLower = array_map('strtolower', $emails);
     $frequence = array_count_values($emailsLower);
-    
+
     ob_start();
     ?>
     <h3>Tableau des adresses emails et leur fréquence</h3>
@@ -88,28 +104,38 @@ if ($action === '1') {
     </table>
     <?php
     $displayContent = ob_get_clean();
+    $message = "";
+    return [$message, $displayContent];
+}
 
-} elseif ($action === '3') {
-    // Action 3 : Supprimer les doublons, trier et enregistrer dans EmailsT.txt
+/* ----------------------------------------------------------
+   Action 3 : Supprimer les doublons, trier et enregistrer dans EmailsT.txt
+---------------------------------------------------------- */
+function processAction3() {
     $emails = chargerEmails(EMAILS_FILE);
     $emailsLower = array_map('strtolower', $emails);
     $emailsUnique = array_unique($emailsLower);
     sort($emailsUnique);
     enregistrerEmails(EMAILS_TRIES_FILE, $emailsUnique);
+    
     $message = "Les emails ont été dédoublonnés et triés. Le résultat a été enregistré dans '" . EMAILS_TRIES_FILE . "'. Nombre d'emails : " . count($emailsUnique) . ".";
     
-    if (file_exists(EMAILS_TRIES_FILE)) {
-        ob_start();
-        echo "<h4>Contenu de " . EMAILS_TRIES_FILE . " :</h4>";
-        echo "<pre>" . file_get_contents(EMAILS_TRIES_FILE) . "</pre>";
-        $displayContent = ob_get_clean();
-    }
+    ob_start();
+    echo "<h4>Contenu de " . EMAILS_TRIES_FILE . " :</h4>";
+    echo "<pre>" . file_get_contents(EMAILS_TRIES_FILE) . "</pre>";
+    $displayContent = ob_get_clean();
+    
+    return [$message, $displayContent];
+}
 
-} elseif ($action === '4') {
-    // Action 4 : Séparer les emails par domaine et les enregistrer dans des fichiers distincts.
+/* ----------------------------------------------------------
+   Action 4 : Séparer les emails par domaine et les enregistrer dans des fichiers distincts.
+---------------------------------------------------------- */
+function processAction4() {
     $emails = chargerEmails(EMAILS_FILE);
     $emailsLower = array_map('strtolower', $emails);
     $emailsParDomaine = [];
+    
     foreach ($emailsLower as $email) {
         if (verifierEmail($email)) {
             // Récupération du domaine : tout ce qui suit le dernier '@'
@@ -117,6 +143,7 @@ if ($action === '1') {
             $emailsParDomaine[$domaine][] = $email;
         }
     }
+    
     $filesCreated = [];
     foreach ($emailsParDomaine as $domaine => $emailsDomain) {
         // Pour le nom du fichier, remplacer les points par des underscores
@@ -124,85 +151,84 @@ if ($action === '1') {
         enregistrerEmails($filename, $emailsDomain);
         $filesCreated[] = $filename;
     }
+    
     $message = "Les emails ont été séparés par domaine. Fichiers créés : " . implode(", ", $filesCreated) . ".";
     
-    if (!empty($filesCreated)) {
-        ob_start();
-        foreach ($filesCreated as $file) {
-            if (file_exists($file)) {
-                echo "<h4>Contenu de $file :</h4>";
-                echo "<pre>" . file_get_contents($file) . "</pre>";
-            }
+    ob_start();
+    foreach ($filesCreated as $file) {
+        if (file_exists($file)) {
+            echo "<h4>Contenu de $file :</h4>";
+            echo "<pre>" . file_get_contents($file) . "</pre>";
         }
-        $displayContent = ob_get_clean();
     }
+    $displayContent = ob_get_clean();
+    
+    return [$message, $displayContent];
+}
 
-} elseif ($action === '5') {
-    // Action 5 : Ajouter une adresse email via un formulaire
+/* ----------------------------------------------------------
+   Action 5 : Ajouter une adresse email via un formulaire
+---------------------------------------------------------- */
+function processAction5() {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nouveau_email'])) {
         $nouveauEmail = trim($_POST['nouveau_email']);
         $emails = chargerEmails(EMAILS_FILE);
         $emailsLower = array_map('strtolower', $emails);
         if (!verifierEmail($nouveauEmail)) {
-            $message = "AAAAAAAAAA L'adresse email n'est pas valide.";
+            $message = "L'adresse email n'est pas valide.";
         } elseif (in_array(strtolower($nouveauEmail), $emailsLower)) {
-            $message = "oups Cette adresse email existe déjà.";
+            $message = "Cette adresse email existe déjà.";
         } else {
             file_put_contents(EMAILS_FILE, strtolower($nouveauEmail) . "\n", FILE_APPEND);
-            $message = "wiii Adresse email ajoutée avec succès.";
+            $message = "Adresse email ajoutée avec succès.";
         }
-        
         ob_start();
         echo "<h4>Contenu mis à jour de " . EMAILS_FILE . " :</h4>";
         echo "<pre>" . file_get_contents(EMAILS_FILE) . "</pre>";
         $displayContent = ob_get_clean();
     } else {
-        ob_start();
-        echo "<h4>Contenu actuel de " . EMAILS_FILE . " :</h4>";
-        if (file_exists(EMAILS_FILE)) {
-            echo "<pre>" . file_get_contents(EMAILS_FILE) . "</pre>";
-        } else {
-            echo "<pre>Aucun email enregistré.</pre>";
-        }
-        $displayContent = ob_get_clean();
+        $displayContent = displayCurrentEmails();
+        $message = "";
     }
+    return [$message, $displayContent];
+}
 
-} elseif ($action === '6') {
-    // Action 6 : Upload a file (emails.txt) via an HTML form, process it, and store it on the server.
+/* ----------------------------------------------------------
+   Action 6 : Upload un fichier via un formulaire, le traiter et le stocker sur le serveur.
+---------------------------------------------------------- */
+function processAction6() {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['emails_file'])) {
-        // Check for upload errors
         if ($_FILES['emails_file']['error'] === 0) {
             $uploadDir = "uploads/";
-            // Ensure the upload directory exists
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0755, true);
             }
-            // Create a secure file path
             $filename = basename($_FILES["emails_file"]["name"]);
             $extension = pathinfo($filename, PATHINFO_EXTENSION);
             if (strtolower($extension) !== 'txt') {
                 $message = "❌ Error: Only .txt files are allowed.";
+                $displayContent = "";
+                return [$message, $displayContent];
+            }
+            $uploadFile = $uploadDir . $filename;
+            if (move_uploaded_file($_FILES['emails_file']['tmp_name'], $uploadFile)) {
+                // Copier le fichier uploadé dans EMAILS_FILE pour le traitement
+                copy($uploadFile, EMAILS_FILE);
+                $message = "✅ File uploaded successfully and processed as Emails.txt.";
             } else {
-                $uploadFile = $uploadDir . $filename;
-                if (move_uploaded_file($_FILES['emails_file']['tmp_name'], $uploadFile)) {
-                    // Optionally, copy the uploaded file to EMAILS_FILE to process it with your functions
-                    copy($uploadFile, EMAILS_FILE);
-                    $message = "✅ File uploaded successfully and processed as Emails.txt.";
-                } else {
-                    $message = "❌ Error: Failed to move the uploaded file.";
-                }
+                $message = "❌ Error: Failed to move the uploaded file.";
             }
         } else {
             $message = "❌ Error: No file uploaded or an upload error occurred.";
         }
         ob_start();
-        echo "<h4>Uploaded and Processed Emails (Emails.txt):</h4>";
+        echo "<h4>Contenu mis à jour de " . EMAILS_FILE . " :</h4>";
         if (file_exists(EMAILS_FILE)) {
-            echo "<pre>" . htmlspecialchars(file_get_contents(EMAILS_FILE)) . "</pre>";
+            echo "<pre>" . file_get_contents(EMAILS_FILE) . "</pre>";
         }
         $displayContent = ob_get_clean();
+        return [$message, $displayContent];
     } else {
-        // Display the file upload form
         ob_start();
         ?>
         <h3>Upload Emails File</h3>
@@ -215,7 +241,40 @@ if ($action === '1') {
         </form>
         <?php
         $displayContent = ob_get_clean();
+        $message = "";
+        return [$message, $displayContent];
     }
+}
+
+// Récupération de l'action choisie via le paramètre GET
+$action = $_GET['action'] ?? '';
+$message = '';
+$displayContent = '';
+
+// Appel de la fonction liée à l'action choisie
+switch ($action) {
+    case '1':
+        list($message, $displayContent) = processAction1();
+        break;
+    case '2':
+        list($message, $displayContent) = processAction2();
+        break;
+    case '3':
+        list($message, $displayContent) = processAction3();
+        break;
+    case '4':
+        list($message, $displayContent) = processAction4();
+        break;
+    case '5':
+        list($message, $displayContent) = processAction5();
+        break;
+    case '6':
+        list($message, $displayContent) = processAction6();
+        break;
+    default:
+        // Si aucune action n'est spécifiée, afficher le contenu actuel d'EMAILS_FILE
+        $displayContent = displayCurrentEmails();
+        break;
 }
 ?>
 <!DOCTYPE html>
@@ -243,8 +302,7 @@ if ($action === '1') {
         </div>
     <?php endif; ?>
     
-    <?php 
-    if ($action === '5') : ?>
+    <?php if ($action === '5') : ?>
         <h3 class="text-center">Ajouter une adresse email</h3>
         <form method="post" action="?action=5" class="mx-auto" style="max-width: 400px;">
             <div class="mb-3">
@@ -254,7 +312,7 @@ if ($action === '1') {
             <button type="submit" class="btn btn-warning w-100">Ajouter</button>
         </form>
     <?php endif; ?>
-
+    
     <div class="mt-4">
         <?= $displayContent ?>
     </div>
